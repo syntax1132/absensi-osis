@@ -110,6 +110,7 @@ if ('serviceWorker' in navigator) {
             555: { name: "Admin Utama", major: "N/A", class: "N/A" }, 999: { name: "Super Admin", major: "N/A", class: "N/A" }
         },
         ADMIN_IDS: [555, 999],
+        LATE_AT_605_IDS: [109, 124, 213, 275, 681, 906],
         ADMIN_PW: 'm4pro',
         INACTIVITY_LIMIT: 30 * 60 * 1000,
         LS_KEYS: {
@@ -764,10 +765,16 @@ if ('serviceWorker' in navigator) {
             const existingAttendance = Utils.loadFromLS(CONFIG.LS_KEYS.ATT);
             
             const now = new Date();
-            const sixAM = new Date(now);
-            sixAM.setHours(6, 0, 0, 0);
+            const lateTime = new Date(now);
 
-            if (selectedStatus === 'Hadir' && now.getTime() >= sixAM.getTime()) {
+            // Conditional late time based on user ID
+            if (CONFIG.LATE_AT_605_IDS.includes(state.currentUser.id)) {
+                lateTime.setHours(6, 5, 0, 0);
+            } else {
+                lateTime.setHours(6, 0, 0, 0);
+            }
+
+            if (selectedStatus === 'Hadir' && now.getTime() >= lateTime.getTime()) {
                 note = 'Telat';
             }
 
