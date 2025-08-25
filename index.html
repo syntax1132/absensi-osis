@@ -1,0 +1,1286 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Absensi OSIS SMK M4 — v6.1 PRO</title>
+  
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#3B82F6">
+  <meta name="description" content="Aplikasi Absensi OSIS SMK M4 Pro dengan fitur canggih, gamifikasi, dan mode offline.">
+  <link rel="apple-touch-icon" href="https://placehold.co/192x192/3B82F6/FFFFFF?text=M4">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/feather-icons"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+  <script src="https://cdn.jsdelivr.net/npm/date-fns"></script>
+
+  <style>
+    :root { --toast-transform: translateY(18px); }
+    html { scroll-behavior: smooth; }
+    .loading-spinner{border:6px solid rgba(255,255,255,.15);border-top:6px solid #fff;border-radius:50%;width:48px;height:48px;animation:spin 1s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .mirror{transform:scaleX(-1)}
+    .toast{position:fixed;right:1rem;bottom:1.25rem;z-index:9999;display:flex;flex-direction:column;align-items:flex-end}
+    .toast-msg{background:#111827;color:#fff;padding:.75rem 1rem;border-radius:.5rem;margin-top:.5rem;opacity:0;transform:var(--toast-transform);transition:all .3s ease;box-shadow:0 8px 20px rgba(0,0,0,.18);max-width:340px;display:flex;align-items:center;gap:.75rem;}
+    .toast-msg.show{opacity:1;transform:translateY(0)}
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;opacity:0;transition:opacity .3s ease;pointer-events:none;}
+    .modal-backdrop.visible{opacity:1;pointer-events:auto;}
+    .modal-content{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(.95);background:white;padding:1.5rem;border-radius:.75rem;z-index:101;width:90%;max-width:500px;opacity:0;transition:all .3s ease;pointer-events:none;}
+    .dark .modal-content{background:#1f2937;}
+    .modal-backdrop.visible .modal-content{transform:translate(-50%,-50%) scale(1);opacity:1;pointer-events:auto;}
+    .nav-btn.active{color:#2563eb; background-color: rgba(59, 130, 246, 0.1);}
+    .animate-fade-in { animation: fadeIn .5s ease-in-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans">
+  <div id="splash" class="fixed inset-0 flex items-center justify-center bg-blue-600 z-50 transition-opacity duration-500">
+    <div class="text-center text-white">
+      <div class="loading-spinner mx-auto mb-4"></div>
+      <h1 class="text-2xl font-bold">Memuat Aplikasi Absensi Pro...</h1>
+      <p class="mt-2 text-sm opacity-90">v6.1 — Fitur Absen Telat & Unduh Foto</p>
+    </div>
+  </div>
+
+  <div id="app" class="hidden flex flex-col min-h-screen">
+    <header class="sticky top-0 z-40 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-700">
+      <div id="header-content" class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between"></div>
+    </header>
+
+    <main id="main-content" class="flex-1 max-w-6xl mx-auto p-4 w-full animate-fade-in"></main>
+
+    <footer class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-t border-gray-200 dark:border-gray-700 sticky bottom-0 z-40">
+      <div id="navTabs" class="max-w-6xl mx-auto px-4 py-2 flex items-center justify-around"></div>
+    </footer>
+  </div>
+
+  <template id="login-template">
+    <section id="loginSection" class="mt-6">
+      <div class="bg-white dark:bg-gray-800 shadow-xl rounded-xl p-6 max-w-md mx-auto text-center">
+        <img src="https://placehold.co/80x80/3B82F6/FFFFFF?text=M4" alt="logo" class="w-20 h-20 rounded-full object-cover mx-auto mb-4" />
+        <h2 class="text-2xl font-bold mb-2">Selamat Datang!</h2>
+        <p class="small-muted mb-6">Masuk untuk melanjutkan ke sistem absensi OSIS.</p>
+        <div class="space-y-3">
+          <input id="userIdInput" type="number" placeholder="Masukkan ID Anggota" class="w-full text-center px-4 py-3 rounded-md border dark:bg-gray-700 dark:border-gray-600" />
+          <button id="loginBtn" class="w-full px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition icon-btn justify-center text-base"><i data-feather="log-in" class="w-5 h-5"></i>Masuk</button>
+          <button id="qrLoginBtn" class="w-full px-4 py-3 bg-gray-700 text-white rounded-md hover:bg-gray-800 transition icon-btn justify-center text-base"><i data-feather="grid" class="w-5 h-5"></i>Login dengan QR (Simulasi)</button>
+        </div>
+        <p id="loginMsg" class="mt-4 text-sm text-red-500 hidden"></p>
+      </div>
+    </section>
+  </template>
+  
+  <template id="admin-detail-template">
+    <section class="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-xl font-bold" id="adminDetailTitle"></h3>
+        <button id="backToAdminBtn" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"><i data-feather="arrow-left"></i></button>
+      </div>
+      <div id="adminDetailContent" class="space-y-4"></div>
+    </section>
+  </template>
+
+  <div id="modalBackdrop" class="modal-backdrop">
+    <div id="modalContent" class="modal-content" role="dialog" aria-modal="true"></div>
+  </div>
+  <div id="toastContainer" class="toast"></div>
+
+<script>
+// PWA Service Worker Registration
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+      .then(registration => console.log('ServiceWorker registration successful:', registration.scope))
+      .catch(err => console.log('ServiceWorker registration failed:', err));
+  });
+}
+
+// Main App Logic (Self-executing function)
+(function() {
+    'use strict';
+    
+    /* ============================
+       INITIAL CONFIG & STATE
+    ============================ */
+    const CONFIG = {
+        USER_DATA: {
+            911: { name: "Andi Arfiyansyah", major: "TKJ", class: "11" }, 158: { name: "Anjani Putri Hanifa", major: "DKV", class: "10" }, 743: { name: "Alya Nur Khazanah", major: "Farmasi", class: "10" }, 321: { name: "Clay Moses Yosca", major: "DKV", class: "12" }, 906: { name: "Diara Siti Zuleyka", major: "Farmasi", class: "11" }, 275: { name: "Dinda Ifatul", major: "TKJ", class: "10" }, 619: { name: "Dona Meillyana Putri", major: "Farmasi", class: "10" }, 882: { name: "Dzakiyyah Ayu Syafiqah", major: "Farmasi", class: "11" }, 491: { name: "Elva Aulia Nissa", major: "Farmasi", class: "11" }, 734: { name: "Fasya Zulfadlih", major: "TKJ", class: "10" }, 559: { name: "Kartika Hardi Septia", major: "DKV", class: "11" }, 837: { name: "Kayla Nabila Azzahra", major: "DKV", class: "11" }, 124: { name: "Muhammad Iqbal Al Sofwa", major: "DKV", class: "11" }, 770: { name: "Mutiara Al Madhona", major: "Farmasi", class: "11" }, 945: { name: "Natasya Zulfa Azzizah", major: "DKV", class: "11" }, 302: { name: "Nayla Putri Azzahra", major: "TKJ", class: "10" }, 681: { name: "Nayshila Juwita", major: "Farmasi", class: "11" }, 213: { name: "Pandu Aryaputra", major: "DKV", class: "10" }, 504: { name: "Rifat Akbar Novianto", major: "Farmasi", class: "11" }, 978: { name: "Rikhat Jawi Sinerat", major: "TKJ", class: "12" }, 446: { name: "Rindu Febriany Putri", major: "Farmasi", class: "10" }, 109: { name: "Sutan Mahesalegra", major: "DKV", class: "10" }, 652: { name: "Syera Manalu", major: "TKJ", class: "10" }, 817: { name: "Tasya Aulia Nugroho", major: "DKV", class: "10" }, 389: { name: "Theressa Mariana Lappy", major: "Farmasi", class: "10" }, 260: { name: "Vebriantie Sayidzirestu Nurmantara", major: "DKV", class: "11" },
+            555: { name: "Admin Utama", major: "N/A", class: "N/A" }, 999: { name: "Super Admin", major: "N/A", class: "N/A" }
+        },
+        ADMIN_IDS: [555, 999],
+        ADMIN_PW: 'm4pro',
+        INACTIVITY_LIMIT: 30 * 60 * 1000,
+        LS_KEYS: {
+            ATT: 'm4_attendance_v6', IZIN: 'm4_izin_v6', LAP: 'm4_laporan_v6',
+            PHOTOS: 'm4_photos_v6', LOG: 'm4_log_v6', THEME: 'm4_theme_v6', SESSION: 'm4_session_v6', PERMITS: 'm4_permits_v6'
+        }
+    };
+
+    const state = {
+        currentUser: null,
+        currentPage: 'login',
+        charts: {},
+        capturedPhoto: null,
+        videoStream: null
+    };
+
+    const $ = id => document.getElementById(id);
+
+    /* ============================
+       CORE MODULE - App Initialization & Event Handling
+    ============================ */
+    const Core = {
+        init() {
+            UI.initTheme();
+            this.setupEventListeners();
+            Utils.updateClock();
+            setInterval(Utils.updateClock, 1000);
+            
+            window.addEventListener('load', () => {
+                setTimeout(() => {
+                    $('splash').style.opacity = '0';
+                    setTimeout(() => {
+                        $('splash').classList.add('hidden');
+                        $('app').classList.remove('hidden');
+                        Auth.checkSession();
+                    }, 500);
+                }, 1000);
+            });
+        },
+        setupEventListeners() {
+            document.body.addEventListener('click', (e) => {
+                if (e.target.closest('#loginBtn')) Auth.login();
+                if (e.target.closest('#qrLoginBtn')) Auth.showQrModal();
+                if (e.target.closest('#logoutBtn')) Auth.logout();
+                if (e.target.closest('.nav-btn')) Navigation.to(e.target.closest('.nav-btn').dataset.tab);
+                if (e.target.closest('#toggleTheme')) UI.toggleTheme();
+                if (e.target.closest('#adminLoginBtn')) Admin.showLoginModal();
+                if (e.target.closest('#loadDummyDataBtn')) Admin.loadDummyData();
+                if (e.target.closest('#captureBtn')) Forms.capturePhoto();
+                if (e.target.closest('#retryBtn')) Forms.initCamera();
+                if (e.target.closest('#submitPermitBtn')) Forms.handlePermitSubmit(e);
+                if (e.target.closest('#submitReportBtn')) Reports.handleReportUpload(e);
+                if (e.target.closest('#exportDataBtn')) Admin.exportData();
+            });
+            document.body.addEventListener('change', (e) => {
+                if(e.target.id === 'manualPhotoInput') Forms.handleManualUpload(e.target.files[0]);
+                if(e.target.id === 'reportFileInput') Reports.handleFileChange(e.target.files[0]);
+                if(e.target.id === 'permitFileInput') Forms.handlePermitFileChange(e.target.files[0]);
+            });
+            document.body.addEventListener('keyup', e => {
+                if (state.currentPage === 'login' && e.key === 'Enter' && e.target.id === 'userIdInput') Auth.login();
+            });
+        }
+    };
+
+    /* ============================
+       UTILS MODULE - Helpers & Common Functions
+    ============================ */
+    const Utils = {
+        saveToLS(key, data) { localStorage.setItem(key, JSON.stringify(data || [])); },
+        loadFromLS(key) { try { return JSON.parse(localStorage.getItem(key)) || []; } catch (e) { return []; } },
+        formatDate(ts) { return new Date(ts).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }); },
+        updateClock() {
+            const clockEl = $('clock');
+            if (clockEl) clockEl.innerText = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        },
+        showToast(message, type = 'info') {
+            const container = $('toastContainer');
+            const toast = document.createElement('div');
+            toast.classList.add('toast-msg');
+            let icon = 'info';
+            let color = '#3B82F6';
+            if (type === 'success') { icon = 'check-circle'; color = '#10B981'; }
+            else if (type === 'error') { icon = 'x-circle'; color = '#EF4444'; }
+            else if (type === 'warning') { icon = 'alert-triangle'; color = '#FBBF24'; }
+            toast.style.background = color;
+            toast.innerHTML = `<i data-feather="${icon}"></i><span>${message}</span>`;
+            
+            container.appendChild(toast);
+            feather.replace();
+            
+            setTimeout(() => toast.classList.add('show'), 10);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        },
+        logActivity(action, details = {}) {
+            const logs = Utils.loadFromLS(CONFIG.LS_KEYS.LOG);
+            const user = state.currentUser ? `${state.currentUser.name} (${state.currentUser.id})` : 'Guest';
+            logs.unshift({
+                ts: Date.now(),
+                user: user,
+                action: action,
+                details: details
+            });
+            Utils.saveToLS(CONFIG.LS_KEYS.LOG, logs.slice(0, 50));
+        },
+        getUserDataById(id) {
+            return CONFIG.USER_DATA[id];
+        }
+    };
+    
+    /* ============================
+       UI MODULE - Renders all UI components
+    ============================ */
+    const UI = {
+        initTheme() {
+            const theme = Utils.loadFromLS(CONFIG.LS_KEYS.THEME) || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            document.documentElement.classList.toggle('dark', theme === 'dark');
+            const toggleIcon = document.querySelector('#toggleTheme i');
+            if(toggleIcon) toggleIcon.setAttribute('data-feather', theme === 'dark' ? 'sun' : 'moon');
+        },
+        toggleTheme() {
+            const isDark = document.documentElement.classList.toggle('dark');
+            Utils.saveToLS(CONFIG.LS_KEYS.THEME, isDark ? 'dark' : 'light');
+            const toggleIcon = document.querySelector('#toggleTheme i');
+            if(toggleIcon) toggleIcon.setAttribute('data-feather', isDark ? 'sun' : 'moon');
+        },
+        renderPage(page) {
+            state.currentPage = page;
+            this.renderHeader();
+            this.renderFooter();
+            const main = $('main-content');
+            main.innerHTML = '';
+            
+            switch(page) {
+                case 'login':
+                    main.innerHTML = this.getLoginHTML();
+                    break;
+                case 'home':
+                    main.innerHTML = this.getHomePageHTML();
+                    Gamification.renderStreakCard();
+                    Forms.initAttendance();
+                    Forms.initPermitForm();
+                    break;
+                case 'reports':
+                    main.innerHTML = Reports.getReportsPageHTML();
+                    break;
+                case 'leaderboard':
+                    main.innerHTML = Gamification.getLeaderboardPageHTML();
+                    break;
+                case 'profile':
+                    main.innerHTML = this.getProfilePageHTML();
+                    this.renderProfileCharts();
+                    break;
+                case 'admin':
+                    main.innerHTML = Admin.getAdminPageHTML();
+                    Admin.renderPanel();
+                    break;
+            }
+            feather.replace();
+        },
+        getLoginHTML: () => {
+            const hasAdmin = Utils.loadFromLS(CONFIG.LS_KEYS.SESSION)?.isAdmin;
+            const adminButton = hasAdmin ? '' : `
+                <button id="adminLoginBtn" class="w-full px-4 py-3 bg-red-600 text-white rounded-md hover:bg-red-700 transition icon-btn justify-center text-base mt-2">
+                    <i data-feather="lock" class="w-5 h-5"></i>Masuk sebagai Admin
+                </button>`;
+            return `
+                <section id="loginSection" class="mt-6">
+                    <div class="bg-white dark:bg-gray-800 shadow-xl rounded-xl p-6 max-w-md mx-auto text-center">
+                        <img src="https://placehold.co/80x80/3B82F6/FFFFFF?text=M4" alt="logo" class="w-20 h-20 rounded-full object-cover mx-auto mb-4" />
+                        <h2 class="text-2xl font-bold mb-2">Selamat Datang!</h2>
+                        <p class="small-muted mb-6">Masuk untuk melanjutkan ke sistem absensi OSIS.</p>
+                        <div class="space-y-3">
+                            <input id="userIdInput" type="number" placeholder="Masukkan ID Anggota" class="w-full text-center px-4 py-3 rounded-md border dark:bg-gray-700 dark:border-gray-600" />
+                            <button id="loginBtn" class="w-full px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition icon-btn justify-center text-base"><i data-feather="log-in" class="w-5 h-5"></i>Masuk</button>
+                            <button id="qrLoginBtn" class="w-full px-4 py-3 bg-gray-700 text-white rounded-md hover:bg-gray-800 transition icon-btn justify-center text-base"><i data-feather="grid" class="w-5 h-5"></i>Login dengan QR (Simulasi)</button>
+                        </div>
+                        ${adminButton}
+                    </div>
+                </section>`;
+        },
+        renderHeader() {
+            const user = state.currentUser;
+            const content = $('header-content');
+            if (!user) {
+                content.innerHTML = `<div class="font-bold text-lg">Absensi OSIS M4 Pro</div>`;
+                return;
+            }
+            content.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <img src="https://placehold.co/48x48/7C3AED/FFFFFF?text=${user.name.charAt(0)}" alt="avatar" class="w-10 h-10 rounded-full" />
+                    <div>
+                        <div class="font-semibold text-sm">Selamat Datang,</div>
+                        <div class="text-lg font-bold -mt-1">${user.name}</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="toggleTheme" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"><i data-feather="moon"></i></button>
+                    <div id="clock" class="text-sm text-gray-600 dark:text-gray-300 hidden md:block"></div>
+                    <button id="logoutBtn" class="p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900 text-red-500"><i data-feather="log-out"></i></button>
+                </div>`;
+            this.initTheme();
+        },
+        renderFooter() {
+            const nav = $('navTabs');
+            if (!state.currentUser) { nav.innerHTML = ''; return; }
+            const tabs = [
+                { id: 'home', icon: 'home', label: 'Beranda' },
+                { id: 'reports', icon: 'file-text', label: 'Laporan' },
+                { id: 'leaderboard', icon: 'award', label: 'Peringkat' },
+                { id: 'profile', icon: 'user', label: 'Profil' },
+            ];
+            if (state.currentUser.isAdmin) {
+                tabs.push({ id: 'admin', icon: 'shield', label: 'Admin' });
+            }
+            nav.innerHTML = tabs.map(t => `
+                <button data-tab="${t.id}" class="nav-btn flex flex-col items-center gap-1 p-2 rounded-md w-20 ${state.currentPage === t.id ? 'active' : ''}">
+                    <i data-feather="${t.icon}"></i><span class="text-xs">${t.label}</span>
+                </button>`).join('');
+        },
+        getHomePageHTML: () => `
+            <section id="homePage" class="space-y-6">
+                <div id="streak-card"></div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
+                        <h3 class="text-lg font-semibold mb-4">Formulir Absensi</h3>
+                        <form id="attendanceForm"></form>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
+                        <h3 class="text-lg font-semibold mb-4">Formulir Izin Digital</h3>
+                        <form id="permitForm"></form>
+                    </div>
+                </div>
+            </section>`,
+        getProfilePageHTML: () => `
+            <section id="profilePage" class="space-y-6">
+                <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6 text-center">
+                    <img src="https://placehold.co/96x96/7C3AED/FFFFFF?text=${state.currentUser.name.charAt(0)}" class="w-24 h-24 rounded-full mx-auto -mt-16 border-4 border-white dark:border-gray-800">
+                    <h2 class="text-2xl font-bold mt-4">${state.currentUser.name}</h2>
+                    <p class="small-muted">${state.currentUser.major} - Kelas ${state.currentUser.class}</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
+                        <h3 class="font-semibold mb-4">Aktivitas Kehadiran</h3>
+                        <canvas id="profile-attendance-chart"></canvas>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
+                        <h3 class="font-semibold mb-4">Riwayat Terbaru</h3>
+                        <div id="recent-activity-list" class="space-y-2"></div>
+                    </div>
+                </div>
+            </section>`,
+        renderProfileCharts() {
+            const attendance = Utils.loadFromLS(CONFIG.LS_KEYS.ATT).filter(a => a.id === state.currentUser.id);
+            const statusCounts = attendance.reduce((acc, {status}) => ({ ...acc, [status]: (acc[status] || 0) + 1 }), {});
+            if(state.charts.profile) state.charts.profile.destroy();
+            state.charts.profile = new Chart($('profile-attendance-chart'), {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(statusCounts),
+                    datasets: [{ data: Object.values(statusCounts), backgroundColor: ['#34D399', '#FBBF24', '#60A5FA', '#F87171'] }]
+                },
+                options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+            });
+            const listEl = $('recent-activity-list');
+            listEl.innerHTML = attendance.slice(0, 5).map(a => `
+                <div class="flex justify-between items-center text-sm p-2 bg-gray-50 dark:bg-gray-700 rounded-md">
+                    <span>${Utils.formatDate(a.ts)}</span>
+                    <span class="font-semibold">${a.status}</span>
+                </div>`).join('') || '<p class="small-muted">Belum ada aktivitas.</p>';
+        },
+        showModal(title, content, onConfirm, showConfirm = true) {
+            const backdrop = $('modalBackdrop');
+            const modal = $('modalContent');
+            modal.innerHTML = `
+                <div class="flex justify-between items-center pb-3 border-b dark:border-gray-700">
+                    <h3 class="text-lg font-semibold">${title}</h3>
+                    <button class="modal-close-btn p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"><i data-feather="x"></i></button>
+                </div>
+                <div class="py-4">
+                    ${content}
+                </div>
+                <div class="flex justify-end gap-2 pt-3 border-t dark:border-gray-700">
+                    <button class="modal-close-btn px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">Tutup</button>
+                    ${showConfirm ? '<button id="modalConfirmBtn" class="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700">Konfirmasi</button>' : ''}
+                </div>`;
+            feather.replace();
+            backdrop.classList.add('visible');
+            
+            backdrop.addEventListener('click', (e) => {
+                if(e.target === backdrop || e.target.closest('.modal-close-btn')) {
+                    backdrop.classList.remove('visible');
+                }
+            });
+            if (showConfirm) {
+                $('modalConfirmBtn').addEventListener('click', () => {
+                    if (onConfirm) onConfirm();
+                    backdrop.classList.remove('visible');
+                });
+            }
+        }
+    };
+
+    /* ============================
+       AUTH MODULE - Handles Login, Logout, Session
+    ============================ */
+    const Auth = {
+        login() {
+            const userId = parseInt($('userIdInput').value, 10);
+            if (!userId) { Utils.showToast('ID tidak boleh kosong.', 'error'); return; }
+            const userData = CONFIG.USER_DATA[userId];
+            if (userData) {
+                state.currentUser = { id: userId, isAdmin: CONFIG.ADMIN_IDS.includes(userId), ...userData };
+                Utils.saveToLS(CONFIG.LS_KEYS.SESSION, state.currentUser);
+                Utils.logActivity('Login', { id: userId });
+                this.onLoginSuccess();
+            } else {
+                Utils.showToast('ID Pengguna tidak valid.', 'error');
+            }
+        },
+        showQrModal() {
+            UI.showModal('Login dengan QR (Simulasi)', 
+            `<p class="small-muted mb-4">Dalam aplikasi nyata, Anda akan memindai kode QR. Di sini, cukup masukkan ID Anda untuk simulasi.</p>
+             <input id="qrIdInput" type="number" placeholder="Masukkan ID dari QR Code" class="w-full text-center px-4 py-3 rounded-md border dark:bg-gray-700 dark:border-gray-600" />`,
+            () => {
+                $('userIdInput').value = $('qrIdInput').value;
+                this.login();
+            });
+        },
+        onLoginSuccess() {
+            Utils.showToast(`Login berhasil, ${state.currentUser.name}!`, 'success');
+            Navigation.to('home');
+        },
+        checkSession() {
+            const session = Utils.loadFromLS(CONFIG.LS_KEYS.SESSION);
+            if (session && session.id && CONFIG.USER_DATA[session.id]) {
+                state.currentUser = session;
+                Navigation.to('home');
+            } else {
+                Navigation.to('login');
+            }
+        },
+        logout() {
+            if (state.currentUser) {
+                Utils.logActivity('Logout', { id: state.currentUser.id });
+            }
+            Utils.saveToLS(CONFIG.LS_KEYS.SESSION, null);
+            state.currentUser = null;
+            Utils.showToast('Anda telah logout.', 'info');
+            Navigation.to('login');
+        },
+    };
+
+    /* ============================
+       NAVIGATION MODULE - Page routing
+    ============================ */
+    const Navigation = {
+        to(page) {
+            UI.renderPage(page);
+        }
+    };
+
+    /* ============================
+       GAMIFICATION MODULE - Streaks & Leaderboard
+    ============================ */
+    const Gamification = {
+        calculateStreak(userId) {
+            const attendance = Utils.loadFromLS(CONFIG.LS_KEYS.ATT).filter(a => a.id === userId && a.status === 'Hadir').sort((a, b) => b.ts - a.ts);
+            if (attendance.length === 0) return 0;
+            
+            let streak = 0;
+            const uniqueDates = [...new Set(attendance.map(a => new Date(a.ts).setHours(0,0,0,0)))];
+            
+            const now = new Date();
+            const today = now.setHours(0,0,0,0);
+            
+            let lastCheckedDate = new Date(uniqueDates[0]);
+            
+            if (lastCheckedDate.getTime() === today) {
+                streak = 1;
+            } else {
+                return 0;
+            }
+            
+            for (let i = 1; i < uniqueDates.length; i++) {
+                const prevDate = new Date(lastCheckedDate);
+                prevDate.setDate(prevDate.getDate() - 1);
+                
+                if (uniqueDates[i] === prevDate.getTime()) {
+                    streak++;
+                    lastCheckedDate = new Date(uniqueDates[i]);
+                } else {
+                    break;
+                }
+            }
+            return streak;
+        },
+        renderStreakCard() {
+            const streak = this.calculateStreak(state.currentUser.id);
+            const messages = [
+                "Ayo mulai absensi pertamamu!",
+                "Awal yang baik! Terus lanjutkan!",
+                "Luar biasa! Tetap konsisten!",
+                "Hebat! Kamu menjadi panutan!",
+                "Spektakuler! Dedikasimu tak tertandingi!"
+            ];
+            const message = messages[Math.min(streak, messages.length - 1)];
+            $('streak-card').innerHTML = `
+                <div class="bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-6 rounded-xl shadow-lg flex items-center justify-between">
+                    <div>
+                        <p class="text-sm opacity-90">Runtunan Hadir (Streak)</p>
+                        <h4 class="text-4xl font-bold">${streak} Hari</h4>
+                        <p class="mt-2 text-sm opacity-90">${message}</p>
+                    </div>
+                    <i data-feather="trending-up" class="w-16 h-16 opacity-30"></i>
+                </div>`;
+            feather.replace();
+        },
+        getLeaderboardPageHTML: () => {
+            const allAttendance = Utils.loadFromLS(CONFIG.LS_KEYS.ATT);
+            const scores = {};
+            
+            Object.keys(CONFIG.USER_DATA).forEach(id => {
+                scores[id] = Gamification.calculateStreak(parseInt(id));
+            });
+            
+            const sortedUsers = Object.keys(scores).filter(id => scores[id] > 0).sort((a, b) => scores[b] - scores[a]);
+            
+            const listItems = sortedUsers.map((id, index) => {
+                const user = CONFIG.USER_DATA[id];
+                return `
+                    <div class="flex items-center gap-4 p-4 rounded-lg bg-gray-50 dark:bg-gray-700 ${index === 0 ? 'bg-yellow-100 dark:bg-yellow-800' : ''}">
+                        <span class="text-xl font-bold w-8 text-center">${index + 1}</span>
+                        <img src="https://placehold.co/48x48/7C3AED/FFFFFF?text=${user.name.charAt(0)}" alt="avatar" class="w-10 h-10 rounded-full" />
+                        <div class="flex-1">
+                            <div class="font-semibold">${user.name}</div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">${user.major} - ${user.class}</div>
+                        </div>
+                        <span class="text-2xl font-bold text-indigo-600 dark:text-indigo-400">${scores[id]}</span>
+                    </div>`;
+            }).join('');
+            
+            return `
+                <section id="leaderboardPage" class="space-y-6">
+                    <div class="text-center">
+                        <h2 class="text-2xl font-bold">Peringkat Absensi</h2>
+                        <p class="small-muted">Lihat siapa yang paling konsisten!</p>
+                    </div>
+                    <div class="space-y-3">${listItems || '<p class="small-muted text-center">Belum ada data kehadiran yang tercatat.</p>'}</div>
+                </section>`;
+        }
+    };
+
+    /* ============================
+       FORMS MODULE - Handles form submissions
+    ============================ */
+    const Forms = {
+        initAttendance() {
+            const form = $('attendanceForm');
+            if (!form) return;
+            form.innerHTML = this.getAttendanceFormHTML();
+            
+            const statusRadios = document.querySelectorAll('input[name="status"]');
+            const noteField = $('noteField');
+            const submitBtn = $('submitBtn');
+            const photoSection = $('photoSection');
+            
+            if (submitBtn) {
+                statusRadios.forEach(radio => {
+                    radio.addEventListener('change', () => {
+                        noteField.classList.toggle('hidden', radio.value === 'Hadir');
+                        submitBtn.disabled = !radio.value;
+                    });
+                });
+                form.addEventListener('submit', this.handleAttendanceSubmit);
+            }
+            
+            if (photoSection) {
+                 this.initCamera();
+            }
+            feather.replace();
+        },
+        getAttendanceFormHTML() {
+            const existingAttendance = Utils.loadFromLS(CONFIG.LS_KEYS.ATT);
+            const today = new Date().toLocaleDateString();
+            const hasAttendedToday = existingAttendance.some(
+                a => a.id === state.currentUser.id && new Date(a.ts).toLocaleDateString() === today
+            );
+            
+            if (hasAttendedToday) {
+                const entry = existingAttendance.find(a => a.id === state.currentUser.id && new Date(a.ts).toLocaleDateString() === today);
+                return `
+                    <div class="text-center p-6 bg-green-100 dark:bg-green-800 rounded-lg">
+                        <i data-feather="check-circle" class="w-16 h-16 text-green-500 mx-auto mb-2"></i>
+                        <h4 class="text-lg font-bold">Anda sudah absensi hari ini.</h4>
+                        <p class="text-sm mt-1">Status Anda: <span class="font-semibold">${entry.status}</span></p>
+                    </div>`;
+            }
+            
+            return `
+                <div class="space-y-4">
+                    <div class="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg" id="photoSection">
+                        <div id="camera-container" class="space-y-2">
+                             <p class="small-muted font-bold">Ambil foto dengan sikap yang lurus ke depan !</p>
+                             <video id="webcam-stream" class="w-full rounded-md mirror" autoplay playsinline></video>
+                             <canvas id="photo-canvas" class="hidden w-full rounded-md"></canvas>
+                             <img id="captured-photo" class="hidden w-full rounded-md object-cover" />
+                             <div id="camera-controls" class="flex items-center gap-2 justify-center">
+                                 <button type="button" id="captureBtn" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition icon-btn"><i data-feather="camera"></i>Ambil Foto</button>
+                                 <button type="button" id="retryBtn" class="hidden px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition icon-btn"><i data-feather="rotate-ccw"></i>Ulangi</button>
+                             </div>
+                        </div>
+                        <div id="manual-upload-section" class="hidden mt-4">
+                            <label for="manualPhotoInput" class="block font-semibold mb-2">Akses kamera gagal! Upload Foto Manual</label>
+                            <input type="file" id="manualPhotoInput" accept=".jpg, .jpeg, .png" class="w-full text-sm text-gray-500
+                                file:mr-4 file:py-2 file:px-4
+                                file:rounded-full file:border-0
+                                file:text-sm file:font-semibold
+                                file:bg-blue-50 file:text-blue-700
+                                hover:file:bg-blue-100 dark:file:bg-blue-900 dark:file:text-blue-200 dark:hover:file:bg-blue-800" />
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <label class="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-transparent cursor-pointer has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50 dark:has-[:checked]:bg-blue-900">
+                            <input type="radio" name="status" value="Hadir" class="hidden" />
+                            <i data-feather="check-circle" class="w-8 h-8 text-green-500"></i>
+                            <span class="text-sm font-semibold">Hadir</span>
+                        </label>
+                        <label class="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-transparent cursor-pointer has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50 dark:has-[:checked]:bg-blue-900">
+                            <input type="radio" name="status" value="Sakit" class="hidden" />
+                            <i data-feather="thermometer" class="w-8 h-8 text-yellow-500"></i>
+                            <span class="text-sm font-semibold">Sakit</span>
+                        </label>
+                        <label class="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-transparent cursor-pointer has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50 dark:has-[:checked]:bg-blue-900">
+                            <input type="radio" name="status" value="Izin" class="hidden" />
+                            <i data-feather="mail" class="w-8 h-8 text-blue-500"></i>
+                            <span class="text-sm font-semibold">Izin</span>
+                        </label>
+                        <label class="flex flex-col items-center gap-2 p-4 rounded-lg border-2 border-transparent cursor-pointer has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50 dark:has-[:checked]:bg-blue-900">
+                            <input type="radio" name="status" value="Alpha" class="hidden" />
+                            <i data-feather="x-circle" class="w-8 h-8 text-red-500"></i>
+                            <span class="text-sm font-semibold">Alpha</span>
+                        </label>
+                    </div>
+                    <div id="noteField" class="hidden">
+                        <label for="note" class="block text-sm font-medium mb-1">Catatan</label>
+                        <textarea id="note" class="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600" placeholder="Contoh: Surat dari orang tua"></textarea>
+                    </div>
+                    <button id="submitBtn" type="submit" class="w-full px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition icon-btn justify-center text-base" disabled>
+                        <i data-feather="save" class="w-5 h-5"></i>Simpan Absensi
+                    </button>
+                </div>
+            `;
+        },
+        initCamera() {
+            const video = $('webcam-stream');
+            const captureBtn = $('captureBtn');
+            const retryBtn = $('retryBtn');
+            const manualUpload = $('manual-upload-section');
+            const capturedPhoto = $('captured-photo');
+            const canvas = $('photo-canvas');
+            
+            state.capturedPhoto = null;
+            video.style.display = 'block';
+            capturedPhoto.style.display = 'none';
+            captureBtn.style.display = 'block';
+            retryBtn.style.display = 'none';
+            manualUpload.style.display = 'none';
+
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+                .then(stream => {
+                    state.videoStream = stream;
+                    video.srcObject = stream;
+                })
+                .catch(err => {
+                    Utils.showToast('Akses kamera gagal. Silakan upload foto manual.', 'error');
+                    video.style.display = 'none';
+                    manualUpload.style.display = 'block';
+                    captureBtn.style.display = 'none';
+                });
+        },
+        capturePhoto() {
+            if (!state.videoStream) {
+                Utils.showToast('Kamera tidak aktif.', 'warning');
+                return;
+            }
+            
+            const video = $('webcam-stream');
+            const canvas = $('photo-canvas');
+            const context = canvas.getContext('2d');
+            const capturedPhoto = $('captured-photo');
+            const captureBtn = $('captureBtn');
+            const retryBtn = $('retryBtn');
+            
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            context.scale(-1, 1);
+            context.drawImage(video, 0, 0, canvas.width * -1, canvas.height);
+            
+            state.capturedPhoto = canvas.toDataURL('image/jpeg', 0.8);
+            
+            capturedPhoto.src = state.capturedPhoto;
+            video.style.display = 'none';
+            capturedPhoto.style.display = 'block';
+            captureBtn.style.display = 'none';
+            retryBtn.style.display = 'block';
+            
+            state.videoStream.getTracks().forEach(track => track.stop());
+            state.videoStream = null;
+        },
+        handleManualUpload(file) {
+            const maxFileSize = 10 * 1024 * 1024;
+            const validTypes = ['image/jpeg', 'image/png'];
+            
+            if (file.size > maxFileSize) {
+                Utils.showToast('Ukuran file terlalu besar (max 10MB).', 'error');
+                return;
+            }
+            if (!validTypes.includes(file.type)) {
+                Utils.showToast('Format file tidak didukung. Gunakan .jpg, .jpeg, atau .png.', 'error');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                state.capturedPhoto = reader.result;
+                const capturedPhoto = $('captured-photo');
+                const manualUpload = $('manual-upload-section');
+                
+                capturedPhoto.src = state.capturedPhoto;
+                capturedPhoto.style.display = 'block';
+                manualUpload.style.display = 'none';
+                
+                Utils.showToast('Foto berhasil diunggah.', 'success');
+            };
+            reader.readAsDataURL(file);
+        },
+        handleAttendanceSubmit(e) {
+            e.preventDefault();
+            const selectedStatus = document.querySelector('input[name="status"]:checked')?.value;
+            let note = $('note')?.value || '';
+            
+            if (!selectedStatus) {
+                Utils.showToast('Pilih status kehadiran terlebih dahulu.', 'error');
+                return;
+            }
+            
+            const existingAttendance = Utils.loadFromLS(CONFIG.LS_KEYS.ATT);
+            
+            const now = new Date();
+            const sixAM = new Date(now);
+            sixAM.setHours(6, 0, 0, 0);
+
+            if (selectedStatus === 'Hadir' && now.getTime() >= sixAM.getTime()) {
+                note = 'Telat';
+            }
+
+            const newEntry = {
+                id: state.currentUser.id,
+                ts: Date.now(),
+                status: selectedStatus,
+                note: note
+            };
+            
+            existingAttendance.push(newEntry);
+            Utils.saveToLS(CONFIG.LS_KEYS.ATT, existingAttendance);
+            Utils.logActivity('Absensi', { id: state.currentUser.id, status: selectedStatus, note: note });
+            
+            if (state.capturedPhoto) {
+                const photos = Utils.loadFromLS(CONFIG.LS_KEYS.PHOTOS);
+                photos.push({
+                    id: state.currentUser.id,
+                    ts: Date.now(),
+                    photo: state.capturedPhoto
+                });
+                Utils.saveToLS(CONFIG.LS_KEYS.PHOTOS, photos);
+            }
+
+            Utils.showToast('Absensi berhasil disimpan!', 'success');
+            Navigation.to('home');
+        },
+        initPermitForm() {
+            const form = $('permitForm');
+            if (!form) return;
+            form.innerHTML = this.getPermitFormHTML();
+            $('permitName').value = state.currentUser.name;
+            $('permitInfo').value = `${state.currentUser.major} - Kelas ${state.currentUser.class}`;
+        },
+        getPermitFormHTML() {
+            return `
+                <div class="space-y-4">
+                    <div>
+                        <label for="permitName" class="block text-sm font-medium mb-1">Nama</label>
+                        <input type="text" id="permitName" class="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 cursor-not-allowed" disabled />
+                    </div>
+                    <div>
+                        <label for="permitInfo" class="block text-sm font-medium mb-1">Jurusan & Kelas</label>
+                        <input type="text" id="permitInfo" class="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 cursor-not-allowed" disabled />
+                    </div>
+                    <div>
+                        <label for="permitFileInput" class="block text-sm font-medium mb-1">Unggah Dokumen Izin</label>
+                        <input type="file" id="permitFileInput" accept=".jpg, .jpeg, .png, .pdf, .doc" class="w-full text-sm text-gray-500
+                            file:mr-4 file:py-2 file:px-4
+                            file:rounded-full file:border-0
+                            file:text-sm file:font-semibold
+                            file:bg-green-50 file:text-green-700
+                            hover:file:bg-green-100 dark:file:bg-green-900 dark:file:text-green-200 dark:hover:file:bg-green-800" />
+                    </div>
+                    <button type="button" id="submitPermitBtn" class="w-full px-4 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 transition icon-btn justify-center text-base"><i data-feather="upload"></i>Kirim Izin</button>
+                </div>
+            `;
+        },
+        handlePermitFileChange(file) {
+            const maxFileSize = 10 * 1024 * 1024;
+            const validTypes = ['image/jpeg', 'image/png', 'application/pdf', 'application/msword'];
+            if (file.size > maxFileSize) { Utils.showToast('Ukuran file terlalu besar (max 10MB).', 'error'); return; }
+            if (!validTypes.includes(file.type)) { Utils.showToast('Format file tidak didukung.', 'error'); return; }
+            state.permitFile = file;
+            Utils.showToast('File izin siap diunggah!', 'success');
+        },
+        handlePermitSubmit(e) {
+            e.preventDefault();
+            if (!state.permitFile) {
+                Utils.showToast('Silakan unggah dokumen izin terlebih dahulu.', 'error');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const permits = Utils.loadFromLS(CONFIG.LS_KEYS.PERMITS);
+                permits.push({
+                    id: state.currentUser.id,
+                    ts: Date.now(),
+                    fileData: reader.result,
+                    fileName: state.permitFile.name,
+                    fileType: state.permitFile.type
+                });
+                Utils.saveToLS(CONFIG.LS_KEYS.PERMITS, permits);
+                Utils.logActivity('Unggah Dokumen Izin', { id: state.currentUser.id, fileName: state.permitFile.name });
+                Utils.showToast('Dokumen izin berhasil dikirim!', 'success');
+                state.permitFile = null;
+                Navigation.to('home');
+            };
+            reader.readAsDataURL(state.permitFile);
+        }
+    };
+    
+    /* ============================
+       REPORTS MODULE - Handles report uploads
+    ============================ */
+    const Reports = {
+        getReportsPageHTML: () => `
+            <section id="reportsPage" class="space-y-6">
+                <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
+                    <h2 class="text-xl font-bold mb-2">Unggah Laporan Kegiatan</h2>
+                    <p class="small-muted">Unggah laporan kegiatan Anda dalam bentuk dokumen atau gambar.</p>
+                    <form id="reportForm" class="mt-4 space-y-4">
+                        <div>
+                            <label for="reportFileInput" class="block text-sm font-medium mb-1">Unggah Dokumen Laporan</label>
+                            <input type="file" id="reportFileInput" accept=".jpg, .jpeg, .png, .pdf, .doc" class="w-full text-sm text-gray-500
+                                file:mr-4 file:py-2 file:px-4
+                                file:rounded-full file:border-0
+                                file:text-sm file:font-semibold
+                                file:bg-blue-50 file:text-blue-700
+                                hover:file:bg-blue-100 dark:file:bg-blue-900 dark:file:text-blue-200 dark:hover:file:bg-blue-800" />
+                        </div>
+                        <div>
+                            <label for="reportNote" class="block text-sm font-medium mb-1">Catatan Tambahan</label>
+                            <textarea id="reportNote" class="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600" placeholder="Deskripsi singkat tentang kegiatan..."></textarea>
+                        </div>
+                        <div id="uploadProgressContainer" class="hidden">
+                            <label class="block text-sm font-medium">Progress Unggah:</label>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mt-1">
+                                <div id="uploadProgressBar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <button type="button" id="submitReportBtn" class="w-full px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition icon-btn justify-center"><i data-feather="upload"></i>Kirim Laporan</button>
+                    </form>
+                </div>
+            </section>
+        `,
+        handleFileChange(file) {
+            const maxFileSize = 10 * 1024 * 1024;
+            const validTypes = ['image/jpeg', 'image/png', 'application/pdf', 'application/msword'];
+            if (file.size > maxFileSize) { Utils.showToast('Ukuran file terlalu besar (max 10MB).', 'error'); return; }
+            if (!validTypes.includes(file.type)) { Utils.showToast('Format file tidak didukung.', 'error'); return; }
+            state.reportFile = file;
+            Utils.showToast('File laporan siap diunggah!', 'success');
+        },
+        handleReportUpload(e) {
+            e.preventDefault();
+            if (!state.reportFile) { Utils.showToast('Silakan pilih file untuk diunggah.', 'error'); return; }
+
+            const note = $('reportNote').value;
+            const reader = new FileReader();
+            const progressBar = $('uploadProgressBar');
+            const progressContainer = $('uploadProgressContainer');
+            
+            progressContainer.classList.remove('hidden');
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += 10;
+                progressBar.style.width = `${progress}%`;
+                if (progress >= 100) clearInterval(interval);
+            }, 100);
+
+            reader.onloadend = () => {
+                const reports = Utils.loadFromLS(CONFIG.LS_KEYS.LAP);
+                reports.push({
+                    id: state.currentUser.id,
+                    ts: Date.now(),
+                    fileData: reader.result,
+                    fileName: state.reportFile.name,
+                    fileType: state.reportFile.type,
+                    note: note
+                });
+                Utils.saveToLS(CONFIG.LS_KEYS.LAP, reports);
+                Utils.logActivity('Unggah Laporan Kegiatan', { id: state.currentUser.id, fileName: state.reportFile.name });
+                Utils.showToast('Laporan berhasil dikirim!', 'success');
+                state.reportFile = null;
+                setTimeout(() => Navigation.to('reports'), 1000); // Redirect after fake upload
+            };
+            reader.readAsDataURL(state.reportFile);
+        }
+    };
+
+    /* ============================
+       ADMIN MODULE - Admin-specific functions
+    ============================ */
+    const Admin = {
+        getAdminPageHTML: () => `
+            <section id="adminPage" class="space-y-6">
+                <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
+                    <h2 class="text-xl font-bold mb-2">Panel Admin</h2>
+                    <p class="small-muted">Kelola data absensi, laporan, dan lihat statistik.</p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
+                    <h3 class="font-semibold mb-4">Statistik Kehadiran</h3>
+                    <canvas id="admin-attendance-chart"></canvas>
+                </div>
+                <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6 space-y-4">
+                    <h3 class="font-semibold mb-2">Monitoring Absensi</h3>
+                    <div class="flex items-center gap-2">
+                        <input type="text" id="filterInput" placeholder="Filter nama atau ID..." class="w-full px-3 py-2 border rounded-md dark:bg-gray-700 dark:border-gray-600">
+                        <button id="exportDataBtn" class="flex-shrink-0 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"><i data-feather="download"></i></button>
+                    </div>
+                    <div class="flex justify-around bg-gray-100 dark:bg-gray-700 rounded-md p-1">
+                        <button class="tab-btn px-3 py-1 rounded-md text-sm font-medium w-full text-center" data-filter="all">Semua</button>
+                        <button class="tab-btn px-3 py-1 rounded-md text-sm font-medium w-full text-center" data-filter="Hadir">Hadir</button>
+                        <button class="tab-btn px-3 py-1 rounded-md text-sm font-medium w-full text-center" data-filter="Sakit">Sakit</button>
+                        <button class="tab-btn px-3 py-1 rounded-md text-sm font-medium w-full text-center" data-filter="Izin">Izin</button>
+                        <button class="tab-btn px-3 py-1 rounded-md text-sm font-medium w-full text-center" data-filter="Alpha">Alpha</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm table-auto">
+                            <thead class="bg-gray-200 dark:bg-gray-700">
+                                <tr>
+                                    <th class="p-2">Nama</th>
+                                    <th class="p-2">Status</th>
+                                    <th class="p-2">Tanggal</th>
+                                    <th class="p-2 text-center">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attendanceTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
+                    <h3 class="font-semibold mb-4">Dokumen Izin & Laporan</h3>
+                    <div id="documentsList" class="space-y-3"></div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
+                    <h3 class="font-semibold mb-4">Daftar Anggota</h3>
+                    <div class="space-y-3" id="adminMemberList"></div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
+                    <h3 class="font-semibold mb-4">Log Aktivitas</h3>
+                    <div class="text-sm space-y-2" id="activityLogList"></div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
+                    <h3 class="font-semibold mb-4">Aksi Admin</h3>
+                    <div class="space-y-3">
+                        <button id="loadDummyDataBtn" class="w-full px-4 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition icon-btn justify-center"><i data-feather="database"></i>Muat Data Dummy</button>
+                        <button id="resetAllDataBtn" class="w-full px-4 py-3 bg-red-600 text-white rounded-md hover:bg-red-700 transition icon-btn justify-center"><i data-feather="alert-triangle"></i>Reset Semua Data</button>
+                    </div>
+                </div>
+            </section>`,
+        renderPanel() {
+            this.renderCharts();
+            this.renderMonitoringTable();
+            this.renderPermitDocuments();
+            this.renderMemberList();
+            this.renderActivityLog();
+            $('resetAllDataBtn').addEventListener('click', this.resetData);
+            $('filterInput').addEventListener('input', () => this.renderMonitoringTable($('filterInput').value, $('attendanceTableBody').dataset.filter));
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('bg-blue-500', 'text-white', 'dark:bg-blue-500'));
+                    e.target.classList.add('bg-blue-500', 'text-white', 'dark:bg-blue-500');
+                    const filter = e.target.dataset.filter;
+                    this.renderMonitoringTable($('filterInput').value, filter);
+                });
+            });
+            document.querySelector('.tab-btn').classList.add('bg-blue-500', 'text-white', 'dark:bg-blue-500');
+            document.body.addEventListener('click', (e) => {
+                if (e.target.closest('.member-detail-btn')) {
+                    const id = e.target.closest('.member-detail-btn').dataset.id;
+                    this.showMemberDetail(parseInt(id));
+                }
+                if (e.target.closest('#backToAdminBtn')) {
+                    Navigation.to('admin');
+                }
+                if (e.target.closest('.delete-att-btn')) {
+                    const attIndex = e.target.closest('.delete-att-btn').dataset.index;
+                    const memberId = e.target.closest('.delete-att-btn').dataset.memberId;
+                    this.deleteAttendanceRecord(memberId, attIndex);
+                }
+            });
+        },
+        showLoginModal() {
+            UI.showModal('Masuk Sebagai Admin', 
+            `<p class="small-muted mb-4">Masukkan kata sandi admin untuk melanjutkan.</p>
+             <input id="adminPwInput" type="password" placeholder="Kata Sandi" class="w-full text-center px-4 py-3 rounded-md border dark:bg-gray-700 dark:border-gray-600" />`,
+            () => {
+                const password = $('adminPwInput').value;
+                if (password === CONFIG.ADMIN_PW) {
+                    Auth.onLoginSuccess();
+                    Utils.logActivity('Login Admin', { id: state.currentUser.id });
+                } else {
+                    Utils.showToast('Kata sandi salah.', 'error');
+                }
+            });
+        },
+        renderCharts() {
+            const allAttendance = Utils.loadFromLS(CONFIG.LS_KEYS.ATT);
+            const statusCounts = allAttendance.reduce((acc, {status}) => ({ ...acc, [status]: (acc[status] || 0) + 1 }), {});
+            if(state.charts.admin) state.charts.admin.destroy();
+            state.charts.admin = new Chart($('admin-attendance-chart'), {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(statusCounts),
+                    datasets: [{
+                        label: 'Total Absensi',
+                        data: Object.values(statusCounts),
+                        backgroundColor: ['#34D399', '#FBBF24', '#60A5FA', '#F87171'],
+                        borderColor: ['#10B981', '#F59E0B', '#2563EB', '#DC2626'],
+                        borderWidth: 1
+                    }]
+                },
+                options: { responsive: true, scales: { y: { beginAtZero: true } } }
+            });
+        },
+        renderMonitoringTable(query = '', filter = 'all') {
+            const allData = Utils.loadFromLS(CONFIG.LS_KEYS.ATT).sort((a,b) => b.ts - a.ts);
+            const tableBody = $('attendanceTableBody');
+            
+            const filteredData = allData.filter(att => {
+                const user = Utils.getUserDataById(att.id);
+                const matchesQuery = user.name.toLowerCase().includes(query.toLowerCase()) || att.id.toString().includes(query);
+                const matchesFilter = filter === 'all' || att.status === filter;
+                return matchesQuery && matchesFilter;
+            });
+            
+            tableBody.innerHTML = filteredData.map(att => {
+                const user = Utils.getUserDataById(att.id);
+                return `
+                    <tr class="border-b dark:border-gray-700">
+                        <td class="p-2">${user.name}</td>
+                        <td class="p-2 font-semibold">${att.status}</td>
+                        <td class="p-2 text-sm">${Utils.formatDate(att.ts)}</td>
+                        <td class="p-2 text-center">
+                            <button class="member-detail-btn p-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700" data-id="${att.id}">
+                                <i data-feather="eye" class="w-5 h-5"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('') || '<tr><td colspan="4" class="p-4 text-center small-muted">Tidak ada data absensi.</td></tr>';
+            
+            $('attendanceTableBody').dataset.filter = filter;
+            feather.replace();
+        },
+        renderPermitDocuments() {
+            const permitData = Utils.loadFromLS(CONFIG.LS_KEYS.PERMITS);
+            const reportData = Utils.loadFromLS(CONFIG.LS_KEYS.LAP);
+            const documentsList = $('documentsList');
+            
+            const allDocs = [...permitData.map(d => ({...d, type: 'Izin'})), ...reportData.map(d => ({...d, type: 'Laporan'}))].sort((a,b) => b.ts - a.ts);
+
+            if (allDocs.length === 0) {
+                documentsList.innerHTML = '<p class="small-muted text-center">Tidak ada dokumen izin atau laporan yang diunggah.</p>';
+                return;
+            }
+
+            documentsList.innerHTML = allDocs.map(doc => {
+                const user = Utils.getUserDataById(doc.id);
+                return `
+                    <div class="flex items-center gap-4 p-3 rounded-lg bg-gray-50 dark:bg-gray-700">
+                        <i data-feather="${doc.type === 'Izin' ? 'mail' : 'file'}" class="w-6 h-6 flex-shrink-0 text-blue-500"></i>
+                        <div class="flex-1">
+                            <div class="font-semibold">${doc.type} dari ${user.name}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                ${doc.fileName} (${Utils.formatDate(doc.ts)})
+                            </div>
+                        </div>
+                        <a href="${doc.fileData}" download="${doc.fileName}" class="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600" title="Unduh">
+                            <i data-feather="download" class="w-5 h-5 text-green-500"></i>
+                        </a>
+                    </div>
+                `;
+            }).join('');
+            feather.replace();
+        },
+        exportData() {
+            const data = Utils.loadFromLS(CONFIG.LS_KEYS.ATT);
+            if (data.length === 0) {
+                Utils.showToast('Tidak ada data untuk diekspor.', 'warning');
+                return;
+            }
+
+            const header = ["ID", "Nama", "Status", "Tanggal", "Catatan"];
+            const rows = data.map(item => {
+                const user = Utils.getUserDataById(item.id);
+                return [
+                    item.id,
+                    user ? user.name : 'Tidak Dikenal',
+                    item.status,
+                    Utils.formatDate(item.ts),
+                    item.note || ''
+                ].map(field => `"${field}"`).join(',');
+            });
+
+            const csvContent = "data:text/csv;charset=utf-8," + header.join(',') + "\n" + rows.join('\n');
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `data_absensi_${new Date().toLocaleDateString()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            
+            Utils.logActivity('Ekspor Data', { adminId: state.currentUser.id });
+            Utils.showToast('Data berhasil diekspor!', 'success');
+        },
+        showMemberDetail(memberId) {
+            const user = Utils.getUserDataById(memberId);
+            const allAttendance = Utils.loadFromLS(CONFIG.LS_KEYS.ATT).filter(a => a.id === memberId).sort((a, b) => b.ts - a.ts);
+            const allPhotos = Utils.loadFromLS(CONFIG.LS_KEYS.PHOTOS).filter(p => p.id === memberId).sort((a, b) => b.ts - a.ts);
+            
+            const main = $('main-content');
+            main.innerHTML = $('admin-detail-template').innerHTML;
+            $('adminDetailTitle').innerText = `Detail Absensi - ${user.name}`;
+            const detailContent = $('adminDetailContent');
+            
+            const photoHTML = allPhotos.map((photo, index) => `
+                <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 text-center mb-4">
+                    <h4 class="font-semibold mb-2">Foto Wajah Anggota (${index + 1})</h4>
+                    <img src="${photo.photo}" class="w-48 h-48 rounded-md object-cover mx-auto shadow-md" alt="Foto Wajah" />
+                    <a href="${photo.photo}" download="foto_${user.id}_${photo.ts}.jpg" class="mt-2 inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                        <i data-feather="download" class="w-4 h-4 mr-2"></i>Unduh Foto
+                    </a>
+                </div>
+            `).join('');
+
+            const attendanceList = allAttendance.map((att, index) => `
+                <div class="flex justify-between items-center p-3 rounded-lg bg-gray-50 dark:bg-gray-700">
+                    <div class="flex-1">
+                        <span class="font-semibold">${att.status}</span>
+                        <span class="text-sm text-gray-500 dark:text-gray-400"> - ${Utils.formatDate(att.ts)}</span>
+                        ${att.note ? `<div class="text-xs mt-1 italic text-gray-400">Catatan: ${att.note}</div>` : ''}
+                    </div>
+                    <button class="delete-att-btn p-2 rounded-full hover:bg-red-200 dark:hover:bg-red-800" data-index="${index}" data-member-id="${memberId}">
+                        <i data-feather="trash-2" class="w-5 h-5 text-red-500"></i>
+                    </button>
+                </div>
+            `).join('');
+            
+            detailContent.innerHTML = `
+                ${photoHTML || '<div class="small-muted text-center p-4">Tidak ada foto wajah yang tersedia.</div>'}
+                <div class="space-y-2 mt-4">
+                    <h4 class="font-semibold mb-2">Riwayat Absensi</h4>
+                    ${allAttendance.length > 0 ? attendanceList : `<p class="small-muted text-center">Belum ada riwayat absensi untuk anggota ini.</p>`}
+                </div>
+            `;
+            feather.replace();
+        },
+        deleteAttendanceRecord(memberId, index) {
+            UI.showModal('Konfirmasi Hapus',
+                '<p>Apakah Anda yakin ingin menghapus catatan absensi ini? Aksi ini tidak bisa dibatalkan.</p>',
+                () => {
+                    let allAttendance = Utils.loadFromLS(CONFIG.LS_KEYS.ATT);
+                    const recordsToKeep = allAttendance.filter((att, i) => !(att.id === parseInt(memberId) && i === parseInt(index)));
+                    Utils.saveToLS(CONFIG.LS_KEYS.ATT, recordsToKeep);
+                    Utils.logActivity('Hapus Absensi', { adminId: state.currentUser.id, targetId: memberId, index: index });
+                    Utils.showToast('Catatan absensi berhasil dihapus.', 'success');
+                    this.showMemberDetail(memberId);
+                });
+        },
+        renderMemberList() {
+            const memberListEl = $('adminMemberList');
+            const members = Object.keys(CONFIG.USER_DATA).filter(id => !CONFIG.ADMIN_IDS.includes(parseInt(id)));
+            const listItems = members.map(id => {
+                const user = CONFIG.USER_DATA[id];
+                return `
+                    <div class="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-700">
+                        <div>
+                            <div class="font-semibold">${user.name}</div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">ID: ${id}</div>
+                        </div>
+                        <button class="member-detail-btn p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600" data-id="${id}">
+                            <i data-feather="eye" class="w-5 h-5"></i>
+                        </button>
+                    </div>`;
+            }).join('');
+            memberListEl.innerHTML = listItems || '<p class="small-muted">Tidak ada anggota yang terdaftar.</p>';
+            feather.replace();
+        },
+        renderActivityLog() {
+            const logListEl = $('activityLogList');
+            const logs = Utils.loadFromLS(CONFIG.LS_KEYS.LOG);
+            const listItems = logs.map(log => `
+                <div class="p-2 bg-gray-50 dark:bg-gray-700 rounded-md">
+                    <span class="font-semibold">${log.user}</span> - ${log.action}
+                    <div class="text-xs text-gray-500 dark:text-gray-400">${Utils.formatDate(log.ts)}</div>
+                </div>
+            `).join('');
+            logListEl.innerHTML = listItems || '<p class="small-muted">Belum ada log aktivitas.</p>';
+        },
+        loadDummyData() {
+            UI.showModal('Muat Data Dummy',
+                '<p>Apakah Anda yakin ingin memuat data dummy? Ini akan menimpa data absensi yang sudah ada.</p>',
+                () => {
+                    const dummyData = [
+                        { id: 911, ts: new Date().setHours(5, 30), status: 'Hadir', note: '' },
+                        { id: 911, ts: new Date().setHours(6, 15), status: 'Hadir', note: 'Telat' },
+                        { id: 743, ts: new Date().setHours(7, 0), status: 'Sakit', note: 'Surat dokter' },
+                        { id: 321, ts: new Date().setHours(5, 45), status: 'Hadir', note: '' },
+                        { id: 275, ts: new Date().setHours(8, 0), status: 'Izin', note: 'Acara keluarga' },
+                        { id: 652, ts: new Date().setHours(9, 0), status: 'Alpha', note: '' },
+                    ];
+                    Utils.saveToLS(CONFIG.LS_KEYS.ATT, dummyData);
+                    Utils.logActivity('Muat Data Dummy', { adminId: state.currentUser.id });
+                    Utils.showToast('Data dummy berhasil dimuat!', 'success');
+                    Navigation.to('admin');
+                });
+        },
+        resetData() {
+            UI.showModal('Konfirmasi Reset',
+                '<p>Apakah Anda yakin ingin menghapus semua data absensi dan laporan? Aksi ini tidak bisa dibatalkan.</p>',
+                () => {
+                    localStorage.removeItem(CONFIG.LS_KEYS.ATT);
+                    localStorage.removeItem(CONFIG.LS_KEYS.IZIN);
+                    localStorage.removeItem(CONFIG.LS_KEYS.LAP);
+                    localStorage.removeItem(CONFIG.LS_KEYS.PHOTOS);
+                    localStorage.removeItem(CONFIG.LS_KEYS.PERMITS);
+                    Utils.logActivity('Reset Data Penuh', { adminId: state.currentUser.id });
+                    Utils.showToast('Semua data berhasil direset!', 'success');
+                    Navigation.to('admin');
+                });
+        }
+    };
+    
+    // Initialize the app
+    Core.init();
+
+})();
+</script>
+
+</body>
+</html>
